@@ -126,3 +126,55 @@ def populate_network(network, uff_path, input_name, input_shape, output_name):
         parser.parse(uff_path, network)
 ```
 
+
+
+## 缓冲区操作
+
+由于`TensorRT API`的定位是一个`低级别的API`，因此除了`网络运算的优化`以外没有什么是免费提供的。我们需要自己控制`内存`与`显存`之间的交互，这即给编码增加了难度，也释放了内存优化的空间。
+
+这里，我们提供一个基础的示例来完成上诉工作，建议在应用到生产环境前对其进行完善和补充：
+
+```python
+class Buffer(object):
+
+    def __init__(self, host_mem, device_mem):
+        self.host = host_mem
+        self.device = device_mem
+
+    def __str__(self):
+        return "Host:\n" + str(self.host) + "\nDevice:\n" + str(self.device)
+
+    def __repr__(self):
+        return self.__str__()
+
+
+def alloc_buffers(engine, binding):
+    max_batch_size = engine.max_batch_size
+    binding_shape = engine.get_binding_shape(binding)
+    binding_dtype = engine.get_binding_dtype(binding)
+    host_buf = cuda.pagelocked_empty(
+        trt.volume(binding_shape) * max_batch_size,
+        trt.nptype(binding_dtype)
+    )
+    device_buf = cuda.mem_alloc(host_buf.nbytes)
+    return Buffer(host_buf, device_buf)
+
+
+def prepare_buffers(engine):
+    inputs, outputs, bindings = list(), list(), list()
+    stream = cuda.Stream()
+    for binding in engine:
+        binding_buf = alloc_buffers(engine, binding)
+        bindings.append(binding_buf.device)
+        if engine.binding_is_input(binding):
+            inputs.append(binding_buf)
+        else:
+            outputs.append(binding_buf)
+
+    return inputs, outputs, bindings, stream
+
+
+def GiB(GiB_size):
+    return GiB_size * 1 << 30
+```
+
