@@ -84,7 +84,7 @@ with trt.Builder(TRT_LOGGER) as builder:
 我们以一个“两层`卷积`+两层`全链接`”组成的简单卷积神经网络为例展开本节的讨论：
 
 ```python
-def network_builder(network, weights):
+def populate_network(network, weights):
     input = network.add_input(shape=(1, 28, 28), dtype=trt.float32, name='input')
     # ---------------------------------------- Conv01
     conv01 = network.add_convolution(input=input, kernel_shape=(5, 5), num_output_maps=20,
@@ -115,4 +115,14 @@ def network_builder(network, weights):
 ```
 
 
+
+### 从UFF模型进行填充
+
+```python
+def populate_network(network, uff_path, input_name, input_shape, output_name):
+    with trt.UffParser() as parser:
+        parser.register_input(input_name, input_shape)
+        parser.register_output(output_name)
+        parser.parse(uff_path, network)
+```
 
